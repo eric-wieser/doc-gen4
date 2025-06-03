@@ -32,7 +32,18 @@ def runIndexCmd (p : Parsed) : IO UInt32 := do
   let buildDir := match p.flag? "build" with
     | some dir => dir.as! String
     | none => ".lake/build"
-  let hierarchy ← Hierarchy.fromDirectory (Output.basePath buildDir)
+  let files ← do
+    let filesListFile ← match p.flag? "files" with
+    | none => throw <| .userError "--files flag missing"
+    | some filesListFile => pure <| filesListFile.as! String
+    match Lean.Json.parse (← IO.FS.readFile filesListFile) with
+    | .error e => throw <| .userError s!"Could not parse json from {filesListFile}: {e}"
+    | .ok manifestData =>
+    match Lean.fromJson? manifestData with
+    | .error e => throw <| .userError s!"Could not parse an array from {filesListFile}: {e}"
+    | .ok (files : Array System.FilePath) =>
+      pure files
+  let hierarchy ← Hierarchy.fromArray files
   let baseConfig ← getSimpleBaseContext buildDir hierarchy
   htmlOutputIndex baseConfig
   return 0
@@ -92,6 +103,7 @@ def indexCmd := `[Cli|
 
   FLAGS:
     b, build : String; "Build directory."
+    f, files : String; "Json file list."
 ]
 
 def genCoreCmd := `[Cli|

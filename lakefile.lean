@@ -265,11 +265,14 @@ library_facet docs (lib) : Array FilePath := do
   exeJob.bindM fun exeFile => do
     coreJobs.bindM fun coreDeps => do
       moduleJobs.mapM fun modDeps => do
+        let allFiles := (DepSet.mk #[] (modDeps.push (.mk coreDeps #[]))).toArray
         buildFileUnlessUpToDate' dataFile do
           logInfo "Documentation indexing"
+          let fileListFile := buildDir / "doc-data" / "files.json"
+          IO.FS.writeFile fileListFile (Lean.Json.compress <| Lean.toJson allFiles)
           proc {
             cmd := exeFile.toString
-            args := #["index", "--build", buildDir.toString]
+            args := #["index", "--build", buildDir.toString, "--files", fileListFile.toString]
           }
         let traces ← staticFiles.mapM computeTrace
         addTrace <| mixTraceArray traces
